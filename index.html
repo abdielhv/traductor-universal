@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Traductor Universal de Datos</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    :root {
+      --bg:#080c12; --panel:#141c2a; --border:#1e2d45;
+      --accent:#00d4ff; --accent2:#7c3aed; --green:#00e676;
+      --yellow:#ffd600; --red:#ff3d71; --text:#e8f0fe; --muted:#4a6080;
+      --font:'Syne',sans-serif; --mono:'JetBrains Mono',monospace;
+    }
+    html,body { min-height:100vh; background:var(--bg); color:var(--text); font-family:var(--font); }
+    body { background-image:
+      radial-gradient(ellipse 60% 40% at 15% 10%,#00d4ff0d 0%,transparent 70%),
+      radial-gradient(ellipse 40% 50% at 85% 85%,#7c3aed0d 0%,transparent 70%);
+      background-attachment:fixed; }
+    .header { border-bottom:1px solid var(--border); padding:16px 36px;
+      display:flex; align-items:center; justify-content:space-between;
+      background:#0a0f1aaa; backdrop-filter:blur(14px);
+      position:sticky; top:0; z-index:100; }
+    .logo { display:flex; align-items:center; gap:12px; }
+    .logo-icon { width:38px; height:38px; border-radius:10px;
+      background:linear-gradient(135deg,var(--accent),var(--accent2));
+      display:flex; align-items:center; justify-content:center;
+      font-size:20px; font-weight:800; color:#fff; }
+    .logo-text { font-size:18px; font-weight:800; letter-spacing:-0.5px; }
+    .logo-text span { color:var(--accent); }
+    .badge { font-family:var(--mono); font-size:10px; padding:3px 10px;
+      border-radius:20px; border:1px solid var(--accent2);
+      color:var(--accent2); background:#7c3aed15; letter-spacing:1px; }
+    .main { max-width:1100px; margin:0 auto; padding:40px 24px; }
+    .hero { text-align:center; margin-bottom:36px; }
+    .hero h1 { font-size:clamp(26px,5vw,50px); font-weight:800; line-height:1.1; letter-spacing:-1.5px; }
+    .hero h1 span { color:var(--accent); }
+    .hero p { margin-top:10px; color:var(--muted); font-size:15px; max-width:540px; margin-inline:auto; line-height:1.7; }
+    .formats-bar { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:32px; }
+    .fmt-chip { display:flex; align-items:center; gap:5px; padding:5px 14px;
+      border-radius:20px; font-family:var(--mono); font-size:11px; font-weight:700; border:1px solid; letter-spacing:.5px; }
+    .fmt-word  { color:#2B7FE1; border-color:#2B7FE140; background:#2B7FE110; }
+    .fmt-excel { color:#1D7D46; border-color:#1D7D4640; background:#1D7D4610; }
+    .fmt-pdf   { color:#E5322D; border-color:#E5322D40; background:#E5322D10; }
+    .fmt-csv   { color:#F59E0B; border-color:#F59E0B40; background:#F59E0B10; }
+    .fmt-txt   { color:#8B5CF6; border-color:#8B5CF640; background:#8B5CF610; }
+    .fmt-img   { color:#00d4ff; border-color:#00d4ff40; background:#00d4ff10; }
+    .api-section { background:var(--panel); border:1px solid var(--border);
+      border-radius:16px; padding:18px 22px; margin-bottom:20px;
+      display:flex; gap:12px; align-items:center; }
+    .api-label { font-size:11px; font-weight:700; color:var(--muted);
+      font-family:var(--mono); white-space:nowrap; text-transform:uppercase; letter-spacing:1px; }
+    .api-input { flex:1; background:#0a0f1a; border:1px solid var(--border); border-radius:10px;
+      padding:10px 14px; color:var(--text); font-family:var(--mono); font-size:13px; outline:none; transition:border .2s; }
+    .api-input:focus { border-color:var(--accent); }
+    .api-dot { width:10px; height:10px; border-radius:50%; background:var(--red); flex-shrink:0; transition:all .3s; }
+    .api-dot.ok { background:var(--green); box-shadow:0 0 10px var(--green); }
+    .hint { font-size:12px; color:var(--muted); font-family:var(--mono);
+      background:var(--panel); border:1px solid var(--border);
+      border-radius:10px; padding:12px 16px; margin-bottom:24px; line-height:1.9; }
+    .hint b { color:var(--accent); }
+    .upload-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:20px; margin-bottom:30px; }
+    .drop-zone { border:2px dashed var(--border); border-radius:16px; padding:28px 18px;
+      text-align:center; cursor:pointer; transition:all .25s; position:relative;
+      background:var(--panel); user-select:none; }
+    .drop-zone:hover,.drop-zone.drag { border-color:var(--accent); background:#00d4ff08; }
+    .drop-zone.filled { border-style:solid; border-color:var(--accent2); background:#7c3aed08; }
+    .dz-icon { font-size:30px; margin-bottom:10px; }
+    .dz-label { font-size:13px; font-weight:700; margin-bottom:4px; }
+    .dz-sub { font-size:11px; color:var(--muted); font-family:var(--mono); line-height:1.6; }
+    .dz-file { margin-top:10px; font-size:11px; font-family:var(--mono);
+      color:var(--accent); background:#00d4ff12; padding:4px 10px;
+      border-radius:6px; display:inline-block; max-width:90%;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .dz-clear { position:absolute; top:10px; right:12px; background:none; border:none;
+      color:var(--muted); cursor:pointer; font-size:18px; line-height:1; padding:2px 6px; }
+    .dz-clear:hover { color:var(--red); }
+    .file-input { display:none; }
+    .preview-box { background:#0a0f1a; border:1px solid var(--border); border-radius:10px;
+      padding:10px 14px; margin-top:8px; font-size:11px; font-family:var(--mono);
+      color:var(--muted); max-height:72px; overflow:hidden; line-height:1.7;
+      display:none; text-align:left; }
+    .preview-box.visible { display:block; }
+    .run-wrap { text-align:center; margin-bottom:32px; }
+    .run-btn { background:linear-gradient(135deg,var(--accent),var(--accent2));
+      border:none; border-radius:14px; padding:16px 52px;
+      font-family:var(--font); font-size:15px; font-weight:800; color:#fff;
+      cursor:pointer; transition:all .25s; box-shadow:0 0 40px #00d4ff25; }
+    .run-btn:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 0 60px #00d4ff45; }
+    .run-btn:disabled { opacity:.4; cursor:not-allowed; transform:none; }
+    .progress-wrap { display:none; margin:16px 0 8px; }
+    .progress-wrap.visible { display:block; }
+    .progress-bar-bg { height:4px; background:var(--border); border-radius:4px; overflow:hidden; }
+    .progress-bar { height:100%; width:0%; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .5s ease; border-radius:4px; }
+    .step-log { font-family:var(--mono); font-size:12px; color:var(--muted); text-align:center; margin-top:8px; min-height:20px; }
+    .error-box { background:#ff3d7112; border:1px solid #ff3d7140; border-radius:12px;
+      padding:14px 18px; color:var(--red); font-size:13px; font-family:var(--mono);
+      margin-top:16px; line-height:1.7; display:none; }
+    .error-box.visible { display:block; }
+    .ocr-box { background:var(--panel); border:1px solid var(--border); border-radius:14px;
+      padding:20px; margin-bottom:24px; display:none; }
+    .ocr-box.visible { display:block; }
+    .ocr-title { font-size:11px; font-family:var(--mono); color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; }
+    .ocr-text { font-size:13px; line-height:1.7; color:var(--text); font-family:var(--mono); }
+    .results { display:none; }
+    .results.visible { display:block; }
+    .results-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+    .results-title { font-size:19px; font-weight:800; }
+    .stats { display:flex; gap:16px; font-family:var(--mono); font-size:12px; }
+    .stat { display:flex; align-items:center; gap:6px; }
+    .dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+    .dot-g{background:var(--green);} .dot-y{background:var(--yellow);} .dot-r{background:var(--red);}
+    .map-table-wrap { overflow-x:auto; border-radius:14px; border:1px solid var(--border); }
+    table { width:100%; border-collapse:collapse; }
+    th { background:var(--panel); padding:12px 16px; text-align:left;
+      font-size:11px; font-family:var(--mono); color:var(--muted);
+      text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid var(--border); }
+    td { padding:11px 16px; border-bottom:1px solid #1e2d4540; font-size:13px; vertical-align:middle; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#ffffff03; }
+    .col-origin { font-family:var(--mono); font-size:12px; color:var(--accent); }
+    .col-dest { font-family:var(--mono); font-size:12px; color:var(--accent2); }
+    .conf-badge { display:inline-flex; align-items:center; gap:5px;
+      padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; font-family:var(--mono); white-space:nowrap; }
+    .conf-green { background:#00e67618; color:var(--green); border:1px solid #00e67630; }
+    .conf-yellow { background:#ffd60018; color:var(--yellow); border:1px solid #ffd60030; }
+    .conf-red { background:#ff3d7118; color:var(--red); border:1px solid #ff3d7130; }
+    .edit-input { background:#0a0f1a; border:1px solid var(--border); border-radius:6px;
+      padding:5px 8px; color:var(--text); font-size:12px; font-family:var(--mono);
+      width:100%; outline:none; transition:border .2s; min-width:120px; }
+    .edit-input:focus { border-color:var(--accent); }
+    .reason-cell { font-size:11px; color:var(--muted); max-width:200px; line-height:1.5; }
+    .download-wrap { margin-top:28px; text-align:center; }
+    .dl-btn { background:var(--green); color:#080c12; border:none; border-radius:12px;
+      padding:13px 38px; font-family:var(--font); font-size:14px; font-weight:800; cursor:pointer; transition:all .2s; }
+    .dl-btn:hover { opacity:.85; transform:translateY(-1px); }
+    .spinner { display:inline-block; width:14px; height:14px;
+      border:2px solid #ffffff40; border-top-color:#fff;
+      border-radius:50%; animation:spin .7s linear infinite; margin-right:8px; vertical-align:middle; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .footer { text-align:center; padding:32px 24px; font-family:var(--mono); font-size:11px; color:var(--muted); border-top:1px solid var(--border); margin-top:60px; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">∆</div>
+    <div class="logo-text">Traductor<span>Universal</span></div>
+  </div>
+  <div class="badge">GEMINI 1.5 FLASH · MULTIMODAL</div>
+</header>
+
+<main class="main">
+  <div class="hero">
+    <h1>Motor de <span>Inteligencia</span> de Datos</h1>
+    <p>Sube cualquier archivo. La IA extrae, mapea y consolida.<br>Tú solo revisas el semáforo y descargas.</p>
+  </div>
+
+  <div class="formats-bar">
+    <div class="fmt-chip fmt-word">📝 Word .docx</div>
+    <div class="fmt-chip fmt-excel">📊 Excel .xlsx</div>
+    <div class="fmt-chip fmt-pdf">📄 PDF</div>
+    <div class="fmt-chip fmt-csv">🗂️ CSV</div>
+    <div class="fmt-chip fmt-txt">📃 TXT</div>
+    <div class="fmt-chip fmt-img">📷 JPG / PNG</div>
+  </div>
+
+  <div class="api-section">
+    <span class="api-label">Gemini API Key</span>
+    <span id="apiStatus" style="font-family:var(--mono);font-size:10px;color:var(--muted);">—</span>
+    <div class="api-dot" id="apiDot" onclick="checkApiKey()" title="Clic para verificar" style="cursor:pointer;"></div>
+    <input class="api-input" id="apiKey" type="text" placeholder="AIzaSy..." autocomplete="off" spellcheck="false" 
+      oninput="checkApiKey()" onpaste="setTimeout(checkApiKey,50)" onchange="checkApiKey()" style="font-family:var(--mono);letter-spacing:1px;" />
+    <button onclick="toggleKey()" id="toggleBtn" style="background:none;border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--muted);cursor:pointer;font-size:13px;white-space:nowrap;" title="Mostrar/ocultar clave">👁</button>
+  </div>
+
+  <div class="api-section" style="margin-bottom:16px;">
+    <span class="api-label">Modelo</span>
+    <select id="modelSelect" style="flex:1;background:#0a0f1a;border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;cursor:pointer;">
+      <option value="gemini-2.5-flash">&#11088; gemini-2.5-flash &mdash; Recomendado (gratis)</option>
+      <option value="gemini-2.5-flash-lite-preview-06-17">gemini-2.5-flash-lite &mdash; Mas ligero (gratis)</option>
+      <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite &mdash; Alternativa gratuita</option>
+      <option value="gemini-2.0-flash">gemini-2.0-flash &mdash; Mayor capacidad</option>
+    </select>
+  </div>
+
+  <div class="hint">
+    <b>💡 API Key gratis:</b> Ve a <b>aistudio.google.com/app/apikey</b> → inicia sesion con Google → "Create API Key" → copia y pega aqui.<br>
+    <b>⚠️ Si ves error de cuota:</b> Cambia el modelo en el selector de arriba e intenta de nuevo.<br>
+    <b>📁 Soporta:</b> Word (.docx), Excel (.xlsx), PDF (hasta 10 pags), CSV, TXT e imagenes JPG/PNG.
+  </div>
+
+  <div class="upload-grid">
+    <!-- ORIGEN -->
+    <div>
+      <div class="drop-zone filled" id="dz-src" style="cursor:default;">
+        <input class="file-input" id="inp-src" type="file"
+          accept=".csv,.txt,.docx,.xlsx,.xls,.pdf,.jpg,.jpeg,.png,.gif,.webp"
+          onchange="fileChosen('src',this)" style="display:none;" />
+        <div class="dz-icon">📂</div>
+        <div class="dz-label">Archivo Origen</div>
+        <div class="dz-sub">Word · Excel · PDF · CSV · TXT · Imagen</div>
+        <button onclick="document.getElementById('inp-src').click()" style="margin-top:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:10px;padding:10px 24px;color:#fff;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;">📁 Seleccionar archivo</button>
+        <div class="dz-file" id="lbl-src" style="display:none;margin-top:8px;"></div>
+        <button class="dz-clear" id="clr-src" style="display:none" onclick="clearFile(event,'src')">✕</button>
+      </div>
+      <div class="preview-box" id="prev-src"></div>
+    </div>
+    <!-- DESTINO -->
+    <div>
+      <div class="drop-zone filled" id="dz-dst" style="cursor:default;">
+        <input class="file-input" id="inp-dst" type="file"
+          accept=".csv,.txt,.docx,.xlsx,.xls,.pdf,.jpg,.jpeg,.png,.gif,.webp"
+          onchange="fileChosen('dst',this)" style="display:none;" />
+        <div class="dz-icon">🗂️</div>
+        <div class="dz-label">Plantilla Destino</div>
+        <div class="dz-sub">Word · Excel · PDF · CSV · TXT · Imagen</div>
+        <button onclick="document.getElementById('inp-dst').click()" style="margin-top:12px;background:linear-gradient(135deg,var(--accent2),var(--accent));border:none;border-radius:10px;padding:10px 24px;color:#fff;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;">📁 Seleccionar archivo</button>
+        <div class="dz-file" id="lbl-dst" style="display:none;margin-top:8px;"></div>
+        <button class="dz-clear" id="clr-dst" style="display:none" onclick="clearFile(event,'dst')">✕</button>
+      </div>
+      <div class="preview-box" id="prev-dst"></div>
+    </div>
+    <!-- IMAGEN EXTRA -->
+    <div>
+      <div class="drop-zone" id="dz-img" style="cursor:default;">
+        <input class="file-input" id="inp-img" type="file" accept="image/*" onchange="fileChosen('img',this)" style="display:none;" />
+        <div class="dz-icon">📷</div>
+        <div class="dz-label">Imagen Extra (opcional)</div>
+        <div class="dz-sub">Foto de nota o documento escaneado</div>
+        <button onclick="document.getElementById('inp-img').click()" style="margin-top:12px;background:#1e2d45;border:1px solid var(--border);border-radius:10px;padding:10px 24px;color:var(--text);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;">📷 Seleccionar imagen</button>
+        <div class="dz-file" id="lbl-img" style="display:none;margin-top:8px;"></div>
+        <button class="dz-clear" id="clr-img" style="display:none" onclick="clearFile(event,'img')">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="run-wrap">
+    <button class="run-btn" id="runBtn" onclick="runTranslation()" disabled>
+      ⚡ Ejecutar Traducción Universal
+    </button>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="step-log" id="stepLog"></div>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="ocr-box" id="ocrBox">
+    <div class="ocr-title">🔍 Texto extraído de imagen extra (OCR)</div>
+    <div class="ocr-text" id="ocrText"></div>
+  </div>
+
+  <div class="results" id="results">
+    <div class="results-header">
+      <div class="results-title">Semáforo de Confianza</div>
+      <div class="stats">
+        <div class="stat"><div class="dot dot-g"></div><span id="statG">0</span>&nbsp;Auto</div>
+        <div class="stat"><div class="dot dot-y"></div><span id="statY">0</span>&nbsp;Revisar</div>
+        <div class="stat"><div class="dot dot-r"></div><span id="statR">0</span>&nbsp;Manual</div>
+      </div>
+    </div>
+    <div class="map-table-wrap">
+      <table>
+        <thead><tr>
+          <th>Origen</th><th>Destino</th><th>Valor (editable)</th><th>Confianza</th><th>Razón IA</th>
+        </tr></thead>
+        <tbody id="mapBody"></tbody>
+      </table>
+    </div>
+    <div class="download-wrap">
+      <button class="dl-btn" onclick="downloadResult()">⬇️ Descargar en Formato Destino</button>
+    </div>
+  </div>
+</main>
+
+<footer class="footer">
+  Traductor Universal · Word · Excel · PDF · CSV · TXT · Imágenes · Gemini 1.5 Flash · Sin backend · Datos no almacenados
+</footer>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const files  = { src:null, dst:null, img:null };
+const texts  = { src:'', dst:'' };
+let mappings = [];
+
+function getGeminiURL() {
+  const model = document.getElementById("modelSelect")
+    ? document.getElementById("modelSelect").value
+    : "gemini-2.5-flash";
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+}
+
+function toggleKey(){
+  const inp = document.getElementById('apiKey');
+  inp.type = inp.type === 'text' ? 'password' : 'text';
+  document.getElementById('toggleBtn').textContent = inp.type==='text'?'🙈':'👁';
+}
+
+function checkApiKey() {
+  const val = document.getElementById('apiKey').value.trim();
+  const ok  = val.length >= 5;
+  document.getElementById('apiDot').className = 'api-dot'+(ok?' ok':'');
+  const s = document.getElementById('apiStatus');
+  if(s){ s.textContent=ok?'✓ LISTA':val.length?val.length+' car.':'—'; s.style.color=ok?'var(--green)':'var(--muted)'; }
+  // Directly enable/disable run button here too
+  const hasFiles = files.src && files.dst;
+  document.getElementById('runBtn').disabled = !(ok && hasFiles);
+}
+// Poll every 150ms — works on file://, Edge, Chrome, mobile
+setInterval(checkApiKey, 150);
+
+function dzDrag(e,id,on){ e.preventDefault(); document.getElementById(id).classList.toggle('drag',on); }
+
+function dzDrop(e,key){
+  e.preventDefault();
+  document.getElementById('dz-'+key).classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if(f) setFile(key,f);
+}
+
+function fileChosen(key,inp){ if(inp.files[0]) setFile(key,inp.files[0]); }
+
+function setFile(key,f){
+  files[key]=f;
+  if(key==='dst') storeDstRaw(f);
+  const lbl=document.getElementById('lbl-'+key);
+  lbl.textContent='📄 '+f.name; lbl.style.display='inline-block';
+  document.getElementById('clr-'+key).style.display='block';
+  document.getElementById('dz-'+key).classList.add('filled');
+  if(key!=='img') previewFile(key,f);
+  updateRunBtn();
+}
+
+function clearFile(e,key){
+  e.stopPropagation();
+  files[key]=null; texts[key]='';
+  document.getElementById('lbl-'+key).style.display='none';
+  document.getElementById('clr-'+key).style.display='none';
+  document.getElementById('dz-'+key).classList.remove('filled');
+  document.getElementById('inp-'+key).value='';
+  const pv=document.getElementById('prev-'+key);
+  if(pv){ pv.className='preview-box'; pv.textContent=''; }
+  updateRunBtn();
+}
+
+function updateRunBtn(){
+  checkApiKey();
+}
+
+async function previewFile(key,f){
+  try{
+    const t=await extractText(f);
+    texts[key]=t;
+    const pv=document.getElementById('prev-'+key);
+    if(pv){ pv.textContent=t.slice(0,220)+(t.length>220?'…':''); pv.className='preview-box visible'; }
+  }catch(e){}
+}
+
+// ── Extractor universal ──────────────────────────────────────────────────────
+async function extractText(file){
+  const ext=file.name.split('.').pop().toLowerCase();
+
+  if(ext==='csv'||ext==='txt') return readText(file);
+
+  if(ext==='docx'){
+    const ab=await readArrayBuffer(file);
+    const r=await mammoth.extractRawText({arrayBuffer:ab});
+    return r.value;
+  }
+
+  if(ext==='xlsx'||ext==='xls'){
+    const ab=await readArrayBuffer(file);
+    const wb=XLSX.read(ab,{type:'array'});
+    return wb.SheetNames.map(n=>`[Hoja: ${n}]\n`+XLSX.utils.sheet_to_csv(wb.Sheets[n])).join('\n');
+  }
+
+  if(ext==='pdf'){
+    const ab=await readArrayBuffer(file);
+    const pdf=await pdfjsLib.getDocument({data:ab}).promise;
+    let out='';
+    for(let i=1;i<=Math.min(pdf.numPages,10);i++){
+      const pg=await pdf.getPage(i);
+      const ct=await pg.getTextContent();
+      out+=ct.items.map(s=>s.str).join(' ')+'\n';
+    }
+    return out.trim();
+  }
+
+  if(['jpg','jpeg','png','gif','webp','bmp'].includes(ext))
+    return '[IMAGEN]';
+
+  return readText(file);
+}
+
+function readText(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsText(f); }); }
+function readArrayBuffer(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsArrayBuffer(f); }); }
+function readBase64(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(',')[1]); r.onerror=rej; r.readAsDataURL(f); }); }
+
+function isImage(f){ if(!f)return false; return ['jpg','jpeg','png','gif','webp','bmp'].includes(f.name.split('.').pop().toLowerCase()); }
+
+async function callGemini(prompt,imageParts=[]){
+  const key=document.getElementById('apiKey').value.trim();
+  const parts=[{text:prompt},...imageParts];
+  const res=await fetch(`${getGeminiURL()}?key=${key}`,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts}]})
+  });
+  const data=await res.json();
+  if(data.error) throw new Error(data.error.message);
+  return data.candidates?.[0]?.content?.parts?.[0]?.text||'';
+}
+
+async function ocrImage(file){
+  const b64=await readBase64(file);
+  const mime=file.type||'image/jpeg';
+  return callGemini(
+    'Extrae TODO el texto e información de esta imagen. Si hay una tabla, represéntala en formato CSV con encabezados. Preserva nombres de campos y valores claramente.',
+    [{inlineData:{mimeType:mime,data:b64}}]
+  );
+}
+
+function tick(msg,pct){ document.getElementById('progressBar').style.width=pct+'%'; document.getElementById('stepLog').textContent=msg; }
+
+async function runTranslation(){
+  mappings=[];
+  ['errorBox','ocrBox','results'].forEach(id=>document.getElementById(id).className=id.replace('Box','_box').replace('_box','Box'));
+  document.getElementById('errorBox').className='error-box';
+  document.getElementById('ocrBox').className='ocr-box';
+  document.getElementById('results').className='results';
+  document.getElementById('mapBody').innerHTML='';
+
+  const btn=document.getElementById('runBtn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Procesando...';
+  document.getElementById('progressWrap').className='progress-wrap visible';
+  tick('📂 Extrayendo texto de los archivos...',8);
+
+  try{
+    // Fase 1: extraer texto
+    let srcText = texts.src || await extractText(files.src);
+    let dstText = texts.dst || await extractText(files.dst);
+
+    if(isImage(files.src)){ tick('🔍 OCR en archivo origen...',18); srcText=await ocrImage(files.src); }
+    if(isImage(files.dst)){ tick('🔍 OCR en plantilla destino...',22); dstText=await ocrImage(files.dst); }
+
+    // Fase 2: imagen extra opcional
+    let ocrExtra='';
+    if(files.img){
+      tick('🔍 OCR en imagen extra...',30);
+      ocrExtra=await ocrImage(files.img);
+      document.getElementById('ocrText').textContent=ocrExtra;
+      document.getElementById('ocrBox').className='ocr-box visible';
+    }
+
+    // Fase 3: mapeo semántico
+    tick('🧠 Cerebro Semántico: analizando y mapeando campos...',52);
+
+    const prompt=`Eres un motor de mapeo semántico de datos experto, multilingüe, especialista en documentos Word, Excel, PDF y formularios administrativos.
+
+CONTENIDO DEL ARCHIVO ORIGEN:
+"""
+${srcText.slice(0,4000)}
+"""
+
+CONTENIDO DE LA PLANTILLA DESTINO:
+"""
+${dstText.slice(0,2000)}
+"""
+${ocrExtra?`\nDATOS ADICIONALES DE IMAGEN:\n"""\n${ocrExtra}\n"""`:''}
+
+Instrucciones:
+1. Identifica todos los campos, columnas o etiquetas del ORIGEN con sus valores
+2. Identifica todos los campos o columnas de la PLANTILLA DESTINO
+3. Empareja campos equivalentes aunque tengan nombres distintos (español/inglés, abreviaturas, sinónimos)
+4. Extrae el valor real de cada campo del archivo origen
+
+Responde SOLO con JSON válido, sin markdown, sin explicaciones previas:
+{"mapeo":[{"origen":"campo en origen","destino":"campo en destino o SIN_MAPEAR","valor_real":"valor extraído","confianza":95,"razon":"motivo del mapeo"}]}
+
+Niveles de confianza: 90-100 verde (seguro), 60-89 amarillo (revisar), 0-59 rojo (incierto).
+Incluye TODOS los campos del destino aunque no tengan equivalente en origen.`;
+
+    const raw=await callGemini(prompt);
+    const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    mappings=parsed.mapeo||[];
+
+    tick('✅ Listo. Revisa el semáforo y edita si es necesario.',100);
+    renderTable();
+    document.getElementById('results').className='results visible';
+
+  }catch(e){
+    const eb=document.getElementById('errorBox');
+    eb.textContent='⚠️ '+(e.message||'Error. Verifica tu API Key y el formato del archivo.');
+    eb.className='error-box visible';
+    tick('',0);
+  }finally{
+    btn.disabled=false; btn.innerHTML='⚡ Ejecutar Traducción Universal'; updateRunBtn();
+  }
+}
+
+function renderTable(){
+  const tbody=document.getElementById('mapBody');
+  tbody.innerHTML='';
+  let g=0,y=0,r=0;
+  mappings.forEach((m,i)=>{
+    if(m.confianza>=90)g++; else if(m.confianza>=60)y++; else r++;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><span class="col-origin">${esc(m.origen)}</span></td>
+      <td><span class="col-dest">${esc(m.destino)}</span></td>
+      <td><input class="edit-input" data-idx="${i}" value="${esc(m.valor_real||'')}" oninput="editVal(this)"/></td>
+      <td><span class="conf-badge ${confClass(m.confianza)}" id="badge-${i}">${confIcon(m.confianza)} ${m.confianza}%</span></td>
+      <td class="reason-cell">${esc(m.razon||'')}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('statG').textContent=g;
+  document.getElementById('statY').textContent=y;
+  document.getElementById('statR').textContent=r;
+}
+
+function editVal(inp){
+  const i=parseInt(inp.dataset.idx);
+  mappings[i].valor_real=inp.value;
+  mappings[i].confianza=Math.max(mappings[i].confianza,90);
+  const b=document.getElementById('badge-'+i);
+  b.className='conf-badge conf-green'; b.textContent='● 90%';
+  document.getElementById('statG').textContent=mappings.filter(m=>m.confianza>=90).length;
+  document.getElementById('statY').textContent=mappings.filter(m=>m.confianza>=60&&m.confianza<90).length;
+  document.getElementById('statR').textContent=mappings.filter(m=>m.confianza<60).length;
+}
+
+function confClass(s){return s>=90?'conf-green':s>=60?'conf-yellow':'conf-red';}
+function confIcon(s){return s>=90?'●':s>=60?'◐':'○';}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── Guardar raw del destino para reconstrucción ─────────────────────────────
+let dstRawBuffer = null;
+let dstFileName  = '';
+
+function storeDstRaw(f){
+  dstFileName = f.name;
+  const r = new FileReader();
+  r.onload = () => { dstRawBuffer = r.result; };
+  r.readAsArrayBuffer(f);
+}
+
+// ── Descarga en formato de la plantilla destino ──────────────────────────────
+async function downloadResult(){
+  const ext = dstFileName.split('.').pop().toLowerCase();
+
+  if(ext==='xlsx'||ext==='xls'){
+    downloadAsXLSX();
+  } else if(ext==='docx'){
+    downloadAsDOCX();
+  } else {
+    // CSV / TXT / cualquier otro: reconstruir con estructura del destino
+    downloadAsCSV();
+  }
+}
+
+function downloadAsCSV(){
+  // Encabezados = columnas destino, valores = lo mapeado
+  const destCols = [...new Set(mappings.filter(m=>m.destino!=='SIN_MAPEAR').map(m=>m.destino))];
+  const header = destCols.join(',');
+  const row = destCols.map(col=>{
+    const m = mappings.find(x=>x.destino===col);
+    const v = m ? (m.valor_real||'') : '';
+    return `"${String(v).replace(/"/g,'""')}"`;
+  }).join(',');
+  const csv = '\ufeff' + header + '\n' + row;
+  const fname = dstFileName.replace(/\.[^.]+$/,'')+'_llenado.'+dstFileName.split('.').pop();
+  triggerDownload(new Blob([csv],{type:'text/csv;charset=utf-8'}), fname);
+}
+
+function downloadAsXLSX(){
+  // Reconstruir el XLSX del destino con los valores mapeados
+  try{
+    const wb = XLSX.read(dstRawBuffer, {type:'array'});
+    const wsName = wb.SheetNames[0];
+    const ws = wb.Sheets[wsName];
+
+    // Leer headers de la primera fila
+    const range = XLSX.utils.decode_range(ws['!ref']||'A1');
+    for(let col=range.s.c; col<=range.e.c; col++){
+      const headerCell = XLSX.utils.encode_cell({r:0, c:col});
+      if(!ws[headerCell]) continue;
+      const headerVal = String(ws[headerCell].v||'');
+      // Buscar el mapeo para esta columna destino
+      const m = mappings.find(x=>
+        x.destino && x.destino.toLowerCase().trim()===headerVal.toLowerCase().trim()
+      );
+      if(m && m.valor_real){
+        // Escribir en fila 2 (índice 1)
+        const dataCell = XLSX.utils.encode_cell({r:1, c:col});
+        ws[dataCell] = {v: m.valor_real, t:'s'};
+      }
+    }
+    // Ajustar rango si solo había 1 fila
+    if(range.e.r < 1){ range.e.r=1; ws['!ref']=XLSX.utils.encode_range(range); }
+
+    const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    const fname = dstFileName.replace(/\.[^.]+$/,'')+'_llenado.xlsx';
+    triggerDownload(new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), fname);
+  }catch(e){
+    alert('Error generando Excel: '+e.message+'. Descargando como CSV...');
+    downloadAsCSV();
+  }
+}
+
+function downloadAsDOCX(){
+  // Para Word: generar un .txt estructurado con los campos llenados
+  // (modificar DOCX binario requiere librerías pesadas; se entrega texto estructurado)
+  try{
+    let content = '=== DOCUMENTO LLENADO ===
+
+';
+    const destCols = [...new Set(mappings.filter(m=>m.destino&&m.destino!=='SIN_MAPEAR').map(m=>m.destino))];
+    destCols.forEach(col=>{
+      const m = mappings.find(x=>x.destino===col);
+      content += col + ': ' + (m&&m.valor_real ? m.valor_real : '') + '
+';
+    });
+    if(mappings.some(m=>m.destino==='SIN_MAPEAR')){
+      content += '
+=== CAMPOS SIN MAPEAR (datos adicionales del origen) ===
+';
+      mappings.filter(m=>m.destino==='SIN_MAPEAR').forEach(m=>{
+        content += m.origen + ': ' + (m.valor_real||'') + '
+';
+      });
+    }
+    const fname = dstFileName.replace(/\.[^.]+$/,'')+'_llenado.txt';
+    triggerDownload(new Blob([content],{type:'text/plain;charset=utf-8'}), fname);
+  }catch(e){
+    downloadAsCSV();
+  }
+}
+
+function triggerDownload(blob, filename){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+}
+</script>
+</body>
+</html>
